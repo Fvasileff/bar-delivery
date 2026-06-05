@@ -40,15 +40,12 @@ export default function Admin() {
   const [periodo, setPeriodo] = useState<'hoy'|'mes'|'ano'>('hoy')
   const [ahora, setAhora] = useState(Date.now())
 
-  // Búsqueda y filtrado de pedidos
   const [busqueda, setBusqueda] = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'todos'|'pendiente'|'preparando'|'en camino'|'entregado'>('todos')
 
-  // Impresión de tickets
   const [pedidoParaImprimir, setPedidoParaImprimir] = useState<any | null>(null)
   const [autoImprimir, setAutoImprimir] = useState(false)
 
-  // Menú móvil
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [config, setConfig] = useState<Configuracion | null>(null)
   const [formConfig, setFormConfig] = useState({
@@ -66,7 +63,6 @@ export default function Admin() {
         Notification.requestPermission().then(p => setPermisoNoti(p))
       }
     }
-    // Cargar preferencia de auto-impresión
     const cachedAutoPrint = localStorage.getItem('autoImprimir') === 'true'
     setAutoImprimir(cachedAutoPrint)
   }, [])
@@ -121,6 +117,7 @@ export default function Admin() {
   useEffect(() => {
     cargarDatos()
 
+    // 1. Canal para escuchar los pedidos
     const canalPedidos = supabase
       .channel('cambios-pedidos')
       .on(
@@ -129,7 +126,6 @@ export default function Admin() {
         (payload) => {
           if (payload.eventType === 'INSERT') {
             notificarPedido()
-            // Auto-imprimir si está configurado
             cargarDatos().then((nuevosPeds) => {
               const isAuto = localStorage.getItem('autoImprimir') === 'true'
               if (isAuto && nuevosPeds) {
@@ -146,16 +142,39 @@ export default function Admin() {
       )
       .subscribe()
 
+    // 2. Canal para escuchar la configuración
+    const canalConfig = supabase
+      .channel('cambios-config')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'configuracion' },
+        (payload) => {
+          console.log("Configuración actualizada:", payload.new)
+          setConfig(payload.new as Configuracion)
+          setFormConfig({
+            nombre_bar: payload.new.nombre_bar,
+            costo_envio: payload.new.costo_envio.toString(),
+            pedido_minimo: payload.new.pedido_minimo.toString(),
+            horario_apertura: payload.new.horario_apertura,
+            horario_cierre: payload.new.horario_cierre,
+          })
+        }
+      )
+      .subscribe()
+
     const intervaloReloj = setInterval(() => {
       setAhora(Date.now())
     }, 60000)
 
     return () => {
       supabase.removeChannel(canalPedidos)
+      supabase.removeChannel(canalConfig)
       clearInterval(intervaloReloj)
     }
-  }, [audioActivado])
+  }, [audioActivado]) // Aquí termina PERFECTAMENTE el useEffect
 
+  // Ahora sí, cargarDatos queda afuera del useEffect y limpia de errores
+ 
   async function cargarDatos() {
     const [{ data: cats }, { data: prods }, { data: peds }, { data: conf }] = await Promise.all([
       supabase.from('categorias').select('*').order('orden'),
@@ -364,7 +383,6 @@ export default function Admin() {
 
   if (loading) return <div className="admin-loading">Cargando datos...</div>
 
-  // Filtrado de pedidos
   const pedidosFiltrados = pedidos.filter(p => {
     if (filtroEstado !== 'todos' && p.estado !== filtroEstado) return false
     if (busqueda.trim() !== '') {
@@ -463,66 +481,66 @@ export default function Admin() {
           </button>
         </div>
       </div>
-
-      {/* Main Content */}
-      <main className="admin-content">
+{/* Main Content */}
+<main className="admin-content">
+  
+  {/* TAB: PRODUCTOS */}
+  {tab === 'productos' && (
+    <div className="admin-dashboard-grid">
+      {/* Editor de Producto */}
+      <div className="admin-card">
+        <h2 className="admin-card-title">
+          <span>{editando ? 'Editar producto' : 'Nuevo producto'}</span>
+        </h2>
         
-        {/* TAB: PRODUCTOS */}
-        {tab === 'productos' && (
-          <div className="admin-dashboard-grid">
-            {/* Editor de Producto */}
-            <div className="admin-card">
-              <h2 className="admin-card-title">{editando ? 'Editar producto' : 'Nuevo producto'}</h2>
-              
-              <div className="admin-label">Nombre</div>
-              <input className="admin-input" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} placeholder="Cerveza artesanal"/>
+        <div className="admin-label">Nombre</div>
+        <input className="admin-input" value={form.nombre} onChange={e => setForm({...form, nombre: e.target.value})} placeholder="Cerveza artesanal"/>
 
-              <div className="admin-grid2">
-                <div>
-                  <div className="admin-label">Precio ($)</div>
-                  <input className="admin-input" type="number" value={form.precio} onChange={e => setForm({...form, precio: e.target.value})} placeholder="950"/>
-                </div>
-                <div>
-                  <div className="admin-label">Categoría</div>
-                  <select className="admin-input" value={form.categoria_id} onChange={e => setForm({...form, categoria_id: e.target.value})}>
-                    {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-                  </select>
-                </div>
-              </div>
+        <div className="admin-grid2">
+          <div>
+            <div className="admin-label">Precio ($)</div>
+            <input className="admin-input" type="number" value={form.precio} onChange={e => setForm({...form, precio: e.target.value})} placeholder="950"/>
+          </div>
+          <div>
+            <div className="admin-label">Categoría</div>
+            <select className="admin-input" value={form.categoria_id} onChange={e => setForm({...form, categoria_id: e.target.value})}>
+              {categorias.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+            </select>
+          </div>
+        </div>
 
-              <div className="admin-label">Descripción</div>
-              <input className="admin-input" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder="500ml, lúpulo floral"/>
+        <div className="admin-label">Descripción</div>
+        <input className="admin-input" value={form.descripcion} onChange={e => setForm({...form, descripcion: e.target.value})} placeholder="500ml, lúpulo floral"/>
 
-              <div className="admin-label">Emoji (fallback)</div>
-              <input className="admin-input" value={form.emoji} onChange={e => setForm({...form, emoji: e.target.value})} placeholder="🍺"/>
+        <div className="admin-label">Emoji (fallback)</div>
+        <input className="admin-input" value={form.emoji} onChange={e => setForm({...form, emoji: e.target.value})} placeholder="🍺"/>
 
-              <div className="admin-label">Foto del producto</div>
-              <div className="admin-upload-area">
-                {imagenPreview && (
-                  <div className="admin-upload-preview">
-                    <img src={imagenPreview} alt="Preview" />
-                    <button className="remove-btn" onClick={() => { setImagenFile(null); setImagenPreview(''); if (editando) quitarImagen(); }}>✕</button>
-                  </div>
-                )}
-                <label className="admin-upload-label">
-                  📷 {imagenPreview ? 'Cambiar foto' : 'Subir foto'}
-                  <input type="file" accept="image/*" onChange={handleImagenChange} style={{display:'none'}} />
-                </label>
-              </div>
-
-              <div style={{display:'flex', gap:8, marginTop:8}}>
-                <button className="admin-btn-primary" style={{opacity: subiendoImagen ? 0.6 : 1}} onClick={guardarProducto} disabled={subiendoImagen}>
-                  {subiendoImagen ? 'Subiendo...' : editando ? 'Guardar cambios' : 'Agregar producto'}
-                </button>
-                {editando && <button className="admin-btn-secondary" onClick={() => { setEditando(null); setImagenFile(null); setImagenPreview('') }}>Cancelar</button>}
-              </div>
+        <div className="admin-label">Foto del producto</div>
+        <div className="admin-upload-area">
+          {imagenPreview && (
+            <div className="admin-upload-preview">
+              <img src={imagenPreview} alt="Preview" />
+              <button className="remove-btn" onClick={() => { setImagenFile(null); setImagenPreview(''); if (editando) quitarImagen(); }}>✕</button>
             </div>
+          )}
+          <label className="admin-upload-label">
+            📷 {imagenPreview ? 'Cambiar foto' : 'Subir foto'}
+            <input type="file" accept="image/*" onChange={handleImagenChange} style={{display:'none'}} />
+          </label>
+        </div>
+
+        <div style={{display:'flex', gap:8, marginTop:8}}>
+          <button className="admin-btn-primary" style={{opacity: subiendoImagen ? 0.6 : 1}} onClick={guardarProducto} disabled={subiendoImagen}>
+            {subiendoImagen ? 'Subiendo...' : editando ? 'Guardar cambios' : 'Agregar producto'}
+          </button>
+          {editando && <button className="admin-btn-secondary" onClick={() => { setEditando(null); setImagenFile(null); setImagenPreview('') }}>Cancelar</button>}
+        </div>
+      </div>
 
             {/* Listado de Productos */}
             <div className="admin-card">
               <div className="admin-card-title">
                 <span>Productos ({productos.length})</span>
-                <button className="admin-btn-primary" onClick={abrirNuevo}>+ Nuevo</button>
               </div>
               <div style={{maxHeight:'70vh', overflowY:'auto'}}>
                 {productos.map(p => (
@@ -551,12 +569,14 @@ export default function Admin() {
           </div>
         )}
 
-        {/* TAB: CATEGORÍAS */}
+      {/* TAB: CATEGORÍAS */}
         {tab === 'categorias' && (
           <div className="admin-dashboard-grid">
             {/* Editor de Categorías */}
             <div className="admin-card">
-              <h2 className="admin-card-title">{editandoCat ? 'Editar categoría' : 'Nueva categoría'}</h2>
+              <h2 className="admin-card-title">
+                <span>{editandoCat ? 'Editar categoría' : 'Nueva categoría'}</span>
+              </h2>
               <div className="admin-grid2">
                 <div>
                   <div className="admin-label">Nombre</div>
@@ -574,12 +594,10 @@ export default function Admin() {
                 {editandoCat && <button className="admin-btn-secondary" onClick={() => setEditandoCat(null)}>Cancelar</button>}
               </div>
             </div>
-
             {/* Listado de Categorías */}
             <div className="admin-card">
               <div className="admin-card-title">
                 <span>Categorías ({categorias.length})</span>
-                <button className="admin-btn-primary" onClick={abrirNuevaCat}>+ Nueva</button>
               </div>
               <div style={{maxHeight:'70vh', overflowY:'auto'}}>
                 {categorias.map(c => (
@@ -601,121 +619,123 @@ export default function Admin() {
           </div>
         )}
 
-        {/* TAB: PEDIDOS */}
-        {tab === 'pedidos' && (
-          <div>
-            <div className="admin-realtime">
-              <span className="admin-pulse-dot"></span>
-              Conectado en tiempo real
-            </div>
-
-            {/* Buscador e indicadores */}
-            <div className="admin-card" style={{marginBottom: 20}}>
-              <div className="admin-search-bar">
-                <input 
-                  type="text" 
-                  className="admin-input admin-search-input" 
-                  placeholder="🔍 Buscar por cliente, teléfono, dirección o N° de pedido..." 
-                  value={busqueda}
-                  onChange={e => setBusqueda(e.target.value)}
-                />
+      {/* TAB: PEDIDOS */}
+          {tab === 'pedidos' && (
+            <div>
+              <div className="admin-realtime">
+                <span className="admin-pulse-dot"></span>
+                Conectado en tiempo real
               </div>
 
-              <div className="admin-filter-pills">
-                {(['todos', 'pendiente', 'preparando', 'en camino', 'entregado'] as const).map(est => (
-                  <button 
-                    key={est} 
-                    className={`admin-filter-pill ${filtroEstado === est ? 'active' : ''}`}
-                    onClick={() => setFiltroEstado(est)}
-                  >
-                    {est === 'todos' ? 'Todos' : est.toUpperCase()}
-                  </button>
-                ))}
-              </div>
-            </div>
+              <div className="admin-card" style={{ marginBottom: 20 }}>
+                <div className="admin-search-bar">
+                  <input 
+                    type="text" 
+                    className="admin-input admin-search-input" 
+                    placeholder="🔍 Buscar por cliente, teléfono, dirección o N° de pedido..." 
+                    value={busqueda}
+                    onChange={e => setBusqueda(e.target.value)}
+                  />
+                </div>
 
-            {pedidosFiltrados.length === 0 ? (
-              <div className="admin-card">
-                <div className="admin-empty">No se encontraron pedidos en esta sección</div>
+                <div className="admin-filter-pills">
+                  {(['todos', 'pendiente', 'preparando', 'en camino', 'entregado'] as const).map(est => (
+                    <button 
+                      key={est} 
+                      className={`admin-filter-pill ${filtroEstado === est ? 'active' : ''}`}
+                      onClick={() => setFiltroEstado(est)}
+                    >
+                      {est === 'todos' ? 'Todos' : est.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
-            ) : (
-              <div style={{display:'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(450px, 1fr))', gap:20}}>
-                {pedidosFiltrados.map(p => (
-                  <div 
-                    key={p.id} 
-                    className="admin-pedido-card" 
-                    style={{
-                      borderLeft: p.estado === 'pendiente' 
-                        ? '6px solid #d97706' 
-                        : p.estado === 'preparando' 
-                        ? '6px solid #2563eb' 
-                        : p.estado === 'en camino' 
-                        ? '6px solid #7c3aed' 
-                        : '6px solid #16a34a'
-                    }}
-                  >
-                    <div className="admin-pedido-header">
-                      <div className="admin-pedido-info">
-                        <div className="admin-pedido-num-time">
-                          <span className="admin-pedido-number">#{p.numero}</span>
-                          <span className="admin-pedido-time">⏱ {tiempoRelativo(p.created_at)}</span>
-                        </div>
-                        <div className="admin-pedido-customer">{p.cliente_nombre} · {p.cliente_tel}</div>
-                        <div className="admin-pedido-address">{p.direccion}</div>
-                        {p.referencia && <div className="admin-pedido-address" style={{fontSize:12}}>Ref: {p.referencia}</div>}
-                        {p.nota && <div className="admin-pedido-note">📝 Nota: {p.nota}</div>}
-                      </div>
-                      <span className={`admin-badge ${p.estado}`}>{p.estado}</span>
-                    </div>
 
-                    {p.pedido_items?.length > 0 && (
-                      <div className="admin-pedido-items-box">
-                        <div className="admin-pedido-items-title">Detalle del Pedido</div>
-                        {p.pedido_items.map((item: any) => (
-                          <div key={item.id} className="admin-pedido-item">
-                            <span>
-                              <span className="admin-pedido-qty">{item.cantidad}x</span>
-                              {item.nombre}
-                            </span>
-                            <span>${(item.precio * item.cantidad).toLocaleString('es-AR')}</span>
+              {pedidosFiltrados.length === 0 ? (
+                <div className="admin-card">
+                  <div className="admin-empty">No se encontraron pedidos en esta sección</div>
+                </div>
+              ) : (
+                /* Cambiado el style inline por nuestra clase mágica */
+                <div className="admin-pedidos-grid">
+                  {pedidosFiltrados.map(p => (
+                    <div 
+                      key={p.id} 
+                      className="admin-pedido-card" 
+                      style={{
+                        borderLeft: p.estado === 'pendiente' 
+                          ? '6px solid #d97706' 
+                          : p.estado === 'preparando' 
+                          ? '6px solid #2563eb' 
+                          : p.estado === 'en camino' 
+                          ? '6px solid #7c3aed' 
+                          : '6px solid #16a34a'
+                      }}
+                    >
+                      <div className="admin-pedido-header">
+                        <div className="admin-pedido-info">
+                          <div className="admin-pedido-num-time">
+                            <span className="admin-pedido-number">#{p.numero}</span>
+                            <span className="admin-pedido-time">⏱ {tiempoRelativo(p.created_at)}</span>
                           </div>
-                        ))}
+                          <div className="admin-pedido-customer">{p.cliente_nombre} · {p.cliente_tel}</div>
+                          <div className="admin-pedido-address">{p.direccion}</div>
+                          {p.referencia && <div className="admin-pedido-address" style={{ fontSize: 12 }}>Ref: {p.referencia}</div>}
+                          {p.nota && <div className="admin-pedido-note">📝 Nota: {p.nota}</div>}
+                        </div>
+                        <span className={`admin-badge ${p.estado}`}>{p.estado}</span>
                       </div>
-                    )}
 
-                    <div className="admin-pedido-footer">
-                      <div className="admin-pedido-payment">
-                        Pago: <strong>{p.metodo_pago}</strong>
-                        {p.vuelto ? ` (Vuelto de $${p.vuelto.toLocaleString('es-AR')})` : ''}
+                      {p.pedido_items?.length > 0 && (
+                        <div className="admin-pedido-items-box">
+                          <div className="admin-pedido-items-title">Detalle del Pedido</div>
+                          {p.pedido_items.map((item: any) => (
+                            <div key={item.id} className="admin-pedido-item">
+                              <span>
+                                <span className="admin-pedido-qty">{item.cantidad}x</span>
+                                {item.nombre}
+                              </span>
+                              <span>${(item.precio * item.cantidad).toLocaleString('es-AR')}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Agrupamos los datos económicos en un footer limpio */}
+                      <div className="admin-pedido-footer-precios">
+                        <div className="admin-pedido-payment">
+                          Pago: <strong>{p.metodo_pago}</strong>
+                          {p.vuelto ? ` (Vuelto de $${p.vuelto.toLocaleString('es-AR')})` : ''}
+                        </div>
+                        <div className="admin-pedido-total">
+                          Total: <strong>${p.total?.toLocaleString('es-AR')}</strong>
+                        </div>
                       </div>
-                      <div className="admin-pedido-total">
-                        Total: ${p.total?.toLocaleString('es-AR')}
+
+                      {/* Agrupamos las acciones en un contenedor exclusivo */}
+                      <div className="admin-pedido-acciones-box">
+                        <div className="admin-pedido-estados">
+                          {['pendiente','preparando','en camino','entregado'].map(e => (
+                            <button 
+                              key={e} 
+                              className={`admin-btn-estado ${p.estado===e?'active':''}`} 
+                              onClick={() => cambiarEstado(p.id, e)}
+                            >
+                              {e.toUpperCase()}
+                            </button>
+                          ))}
+                        </div>
+                        <button className="admin-btn-imprimir" onClick={() => imprimirPedido(p)}>
+                          🖨️ Imprimir
+                        </button>
                       </div>
+
                     </div>
-
-                    <div className="admin-pedido-footer" style={{ borderTop: 'none', paddingTop: 0 }}>
-                      <div className="admin-pedido-estados">
-                        {['pendiente','preparando','en camino','entregado'].map(e => (
-                          <button 
-                            key={e} 
-                            className={`admin-btn-estado ${p.estado===e?'active':''}`} 
-                            onClick={() => cambiarEstado(p.id, e)}
-                          >
-                            {e.toUpperCase()}
-                          </button>
-                        ))}
-                      </div>
-                      <button className="admin-btn-secondary" onClick={() => imprimirPedido(p)} style={{ padding: '8px 14px', fontSize: 13, gap: 4 }}>
-                        🖨️ Imprimir
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         {/* TAB: VENTAS */}
         {tab === 'ventas' && (
           <div>
@@ -736,7 +756,6 @@ export default function Admin() {
               </div>
             </div>
 
-            {/* Stats Cards */}
             <div className="admin-stats-grid">
               {[
                 { label:'Ventas Hoy', peds: pedsHoy },
@@ -751,7 +770,6 @@ export default function Admin() {
               ))}
             </div>
 
-            {/* Ventas Chart */}
             <div className="admin-card">
               <h2 className="admin-card-title">
                 {periodo === 'ano' ? 'Ventas por mes' : 'Ventas por día (mes actual)'}
@@ -778,7 +796,6 @@ export default function Admin() {
               )}
             </div>
 
-            {/* Líder de ventas */}
             <div className="admin-card">
               <h2 className="admin-card-title">
                 🏆 Productos Más Vendidos — {periodo === 'hoy' ? 'Hoy' : periodo === 'mes' ? 'Este Mes' : 'Este Año'}
@@ -815,7 +832,6 @@ export default function Admin() {
         {tab === 'config' && (
           <div className="admin-dashboard-grid">
             
-            {/* Configuración General */}
             <div className="admin-card">
               <h2 className="admin-card-title">⚙️ Configuración general</h2>
 
@@ -855,7 +871,6 @@ export default function Admin() {
               <button className="admin-btn-primary" onClick={guardarConfig}>Guardar configuración</button>
             </div>
 
-            {/* Estado del Bar y Auto-Impresión */}
             <div>
               <div className="admin-card">
                 <h2 className="admin-card-title">Estado del bar</h2>
@@ -912,7 +927,6 @@ export default function Admin() {
 
       </main>
 
-      {/* Contenedor de impresión oculto en pantalla pero visible para @media print */}
       <div id="ticket-impresion-container">
         {pedidoParaImprimir && (
           <div id="ticket-impresion">
