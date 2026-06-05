@@ -48,6 +48,8 @@ export default function Admin() {
   const [pedidoParaImprimir, setPedidoParaImprimir] = useState<any | null>(null)
   const [autoImprimir, setAutoImprimir] = useState(false)
 
+  // Menú móvil
+  const [menuAbierto, setMenuAbierto] = useState(false)
   const [config, setConfig] = useState<Configuracion | null>(null)
   const [formConfig, setFormConfig] = useState({
     nombre_bar: '', costo_envio: '', pedido_minimo: '',
@@ -417,8 +419,50 @@ export default function Admin() {
               Cerrar Sesión
             </button>
           </div>
+
+          {/* Hamburguesa para móviles */}
+          <button className="admin-hamburger-btn" onClick={() => setMenuAbierto(true)}>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" style={{ width: 26, height: 26 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
         </div>
       </header>
+
+      {/* Drawer Móvil */}
+      <div className={`admin-drawer-overlay ${menuAbierto ? 'open' : ''}`} onClick={() => setMenuAbierto(false)}></div>
+      <div className={`admin-mobile-drawer ${menuAbierto ? 'open' : ''}`}>
+        <div className="admin-drawer-header">
+          <span className="admin-title" style={{ fontSize: 18 }}>Menú</span>
+          <button className="admin-drawer-close" onClick={() => setMenuAbierto(false)}>✕</button>
+        </div>
+
+        <nav className="admin-drawer-tabs">
+          <button className={`admin-drawer-tab ${tab==='productos' ? 'active' : ''}`} onClick={() => { setTab('productos'); setMenuAbierto(false); }}>Productos</button>
+          <button className={`admin-drawer-tab ${tab==='categorias' ? 'active' : ''}`} onClick={() => { setTab('categorias'); setMenuAbierto(false); }}>Categorías</button>
+          <button className={`admin-drawer-tab ${tab==='pedidos' ? 'active' : ''}`} onClick={() => { setTab('pedidos'); setMenuAbierto(false); }}>Pedidos ({pedidos.length})</button>
+          <button className={`admin-drawer-tab ${tab==='ventas' ? 'active' : ''}`} onClick={() => { setTab('ventas'); setMenuAbierto(false); }}>Ventas</button>
+          <button className={`admin-drawer-tab ${tab==='config' ? 'active' : ''}`} onClick={() => { setTab('config'); setMenuAbierto(false); }}>⚙️ Config</button>
+        </nav>
+
+        <div className="admin-drawer-actions">
+          {!audioActivado ? (
+            <button onClick={() => { activarSonido(); setMenuAbierto(false); }} className="admin-btn-sonido" style={{ width: '100%' }}>
+              🔔 Activar sonido
+            </button>
+          ) : (
+            <span style={{ fontSize: 13, color: '#94a3b8', textAlign: 'center' }}>🔔 Sonido activado</span>
+          )}
+          {permisoNoti === 'granted' ? (
+            <span style={{ fontSize: 12, color: '#94a3b8', textAlign: 'center' }}>💬 Notificaciones ON</span>
+          ) : permisoNoti === 'denied' ? (
+            <span style={{ fontSize: 12, color: '#f87171', textAlign: 'center' }}>⚠️ Notificaciones bloqueadas</span>
+          ) : null}
+          <button onClick={() => { cerrarSesion(); setMenuAbierto(false); }} className="admin-btn-logout" style={{ width: '100%', marginTop: 8 }}>
+            Cerrar Sesión
+          </button>
+        </div>
+      </div>
 
       {/* Main Content */}
       <main className="admin-content">
