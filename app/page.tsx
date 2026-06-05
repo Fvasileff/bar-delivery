@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 interface Categoria { id: number; nombre: string; orden: number }
-interface Producto { id: number; nombre: string; descripcion: string; precio: number; emoji: string; categoria_id: number; activo: boolean }
+interface Producto { id: number; nombre: string; descripcion: string; precio: number; emoji: string; categoria_id: number; activo: boolean; imagen_url?: string }
 interface CartItem extends Producto { qty: number }
 
 export default function Home() {
@@ -192,7 +192,7 @@ const nuevoPedido = () => {
                 {currentCat === 'Todo' && <div className="section-label">{cat}</div>}
                 {prods.map(p => (
                   <div key={p.id} className="product-card" onClick={() => addToCart(p)}>
-                    <div className="prod-img"><span>{p.emoji}</span></div>
+                    <div className="prod-img">{p.imagen_url ? <img src={p.imagen_url} alt={p.nombre} style={{width:'100%', height:'100%', objectFit:'cover', borderRadius:'inherit'}} /> : <span>{p.emoji}</span>}</div>
                     <div className="prod-info">
                       <div className="prod-name">{p.nombre}</div>
                       <div className="prod-desc">{p.descripcion}</div>
@@ -228,7 +228,7 @@ const nuevoPedido = () => {
           <div className="section-label">Tu pedido</div>
           {cartItems.map(i => (
             <div key={i.id} className="cart-item">
-              <span style={{fontSize:20,marginRight:4}}>{i.emoji}</span>
+              <span style={{fontSize:20,marginRight:4}}>{i.imagen_url ? <img src={i.imagen_url} alt={i.nombre} style={{width:20, height:20, objectFit:'cover', borderRadius:4}} /> : i.emoji}</span>
               <span className="ci-name">{i.nombre}</span>
               <span className="ci-price">${(i.precio*i.qty).toLocaleString('es-AR')}</span>
               <div className="qty-ctrl">
